@@ -49,7 +49,7 @@ func main() {
 	rowImg := pngbuff.Bytes()
 
 	lastTime := time.Now()
-	for i := 0; i < 10000000; i++ {
+	for i := 0; i < 1000; i++ {
 		if time.Since(lastTime) > time.Second/2 {
 			lastTime = time.Now()
 			fmt.Println(checkResourceUsage())
