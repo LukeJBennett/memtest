@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"image"
+	"image/color"
 	"image/png"
 	"log"
 	"net/http"
@@ -29,10 +30,20 @@ func main() {
 	img.Init(img.INIT_PNG)
 	Window, _ := sdl.CreateWindow("ICO Memory Test", 75, 10, 400, 300, sdl.WINDOW_SHOWN)
 	Renderer, _ := sdl.CreateRenderer(Window, -1, sdl.RENDERER_SOFTWARE)
+	go func() {
+		for event := sdl.PollEvent(); true; event = sdl.PollEvent() {
+			if event != nil && event.GetType() == sdl.QUIT {
+				os.Exit(0)
+			}
+			time.Sleep(time.Second / 10)
+		}
+	}()
 
 	Renderer.Clear()
 
+	//create byte slice containing a png image
 	dst := image.NewRGBA(image.Rect(0, 0, 300, 200))
+	dst.Set(10, 10, color.RGBA{255, 255, 255, 255})
 	pngbuff := new(bytes.Buffer)
 	(&png.Encoder{CompressionLevel: png.BestSpeed}).Encode(pngbuff, dst)
 	rowImg := pngbuff.Bytes()
@@ -44,9 +55,9 @@ func main() {
 			fmt.Println(checkResourceUsage())
 		}
 
+		//put png into RWops buffer, convert to surface, then to a texture, then put the texture on the screen
 		buf, _ := sdl.RWFromMem(rowImg)
 		defer buf.Close()
-
 		graphic, _ := img.LoadTypedRW(buf, false, "PNG")
 		defer graphic.Free()
 
