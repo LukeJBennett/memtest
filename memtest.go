@@ -12,8 +12,10 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/veandco/go-sdl2/img"
 	"github.com/veandco/go-sdl2/sdl"
@@ -48,6 +50,9 @@ func main() {
 	(&png.Encoder{CompressionLevel: png.BestSpeed}).Encode(pngbuff, dst)
 	rowImg := pngbuff.Bytes()
 
+	//this is only used for the less leaky method
+	//storedSurface := MakeStorableSurface(rowImg)
+
 	lastTime := time.Now()
 	for i := 0; i < 1000000; i++ {
 		if time.Since(lastTime) > time.Second/2 {
@@ -56,9 +61,17 @@ func main() {
 		}
 
 		//put png into RWops buffer, convert to surface, then to a texture, then put the texture on the screen
+
+		//this is the very leaky method
 		buf, _ := sdl.RWFromMem(rowImg)
 		defer buf.Close()
 		graphic, _ := img.LoadTypedRW(buf, false, "PNG")
+		//end very leaky method
+
+		//less leaky method
+		//graphic := GetStoredSurface(storedSurface)
+		//end less leaky method
+
 		defer graphic.Free()
 
 		texture, _ := Renderer.CreateTextureFromSurface(graphic)
@@ -66,9 +79,62 @@ func main() {
 
 		Renderer.Copy(texture, nil, &sdl.Rect{X: 0, Y: 0, W: 400, H: 300})
 		Renderer.Present()
+		debug.FreeOSMemory()
 
 	}
 
+}
+
+/////start of functions for workaround with static global array
+
+type storableSurface struct {
+	Pixels []byte
+	Width  int32
+	Height int32
+	Depth  int
+	Pitch  int
+	Rmask  uint32
+	Gmask  uint32
+	Bmask  uint32
+	Amask  uint32
+}
+
+var imgBuf [2500000]byte ///3 bytes per pixel, 1024x768 max size
+
+func GetStoredSurface(in storableSurface) (out *sdl.Surface) {
+
+	copy(imgBuf[:], in.Pixels)
+	out, _ = sdl.CreateRGBSurfaceFrom(
+		unsafe.Pointer(&imgBuf),
+		in.Width,
+		in.Height,
+		in.Depth,
+		in.Pitch,
+		in.Rmask,
+		in.Gmask,
+		in.Bmask,
+		in.Amask,
+	)
+	return
+}
+
+func MakeStorableSurface(rowImg []byte) (out storableSurface) {
+	buf, _ := sdl.RWFromMem(rowImg)
+	in, _ := img.LoadTypedRW(buf, false, "PNG")
+
+	pixels := in.Pixels()
+	out = storableSurface{
+		Pixels: pixels,
+		Width:  in.W,
+		Height: in.H,
+		Depth:  int(in.Format.BitsPerPixel),
+		Pitch:  int(in.Pitch),
+		Rmask:  in.Format.Rmask,
+		Gmask:  in.Format.Gmask,
+		Bmask:  in.Format.Bmask,
+		Amask:  in.Format.Amask,
+	}
+	return
 }
 
 func checkResourceUsage() string {
